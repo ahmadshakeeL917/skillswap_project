@@ -1,6 +1,7 @@
 import streamlit as st
 from supabase import create_client
 
+@st.cache_resource
 def get_supabase():
     url = st.secrets["supabase"]["url"]
     key = st.secrets["supabase"]["key"]
@@ -8,6 +9,7 @@ def get_supabase():
 
 def db():
     return get_supabase()
+
 # ─── AUTH ───────────────────────────────────────────
 def login_user(email, password):
     res = db().table("users").select("*").eq("email", email).eq("passwordhash", password).execute()
@@ -83,9 +85,47 @@ def place_bid(jobid, providerid, amount, note):
     }).execute()
 
 def accept_bid(bidid, jobid):
+    # 1. Accept this bid, reject others
     db().table("bids").update({"bidstatus": "accepted"}).eq("bidid", bidid).execute()
     db().table("bids").update({"bidstatus": "rejected"}).eq("jobid", jobid).neq("bidid", bidid).execute()
     db().table("jobpostings").update({"status": "in_progress"}).eq("postingid", jobid).execute()
+
+    # 2. Fetch bid details (amount, seller)
+    bid = db().table("bids").select("*").eq("bidid", bidid).execute().data
+    if not bid:
+        return None
+    bid = bid[0]
+    sellerid = bid["providerid"]
+    amount = bid["bidamount"]
+
+    # 3. Fetch job details (buyer)
+    job = db().table("jobpostings").select("*").eq("postingid", jobid).execute().data
+    if not job:
+        return None
+    buyerid = job[0]["requesterid"]
+
+    # 4. Create order in ordersescrow (escrow hold)
+    order = db().table("ordersescrow").insert({
+        "buyerid": buyerid,
+        "sellerid": sellerid,
+        "listingid": None,
+        "amount": amount,
+        "escrowstatus": "active"
+    }).execute()
+
+    # 5. Deduct buyer wallet
+    buyer = db().table("users").select("walletbalance").eq("studentid", buyerid).execute().data[0]
+    new_balance = buyer["walletbalance"] - amount
+    db().table("users").update({"walletbalance": new_balance}).eq("studentid", buyerid).execute()
+
+    # 6. Record wallet transaction
+    db().table("wallet_transactions").insert({
+        "studentid": buyerid,
+        "amount": -amount,
+        "transactiontype": "escrow_hold"
+    }).execute()
+
+    return order.data[0] if order.data else None
 
 def get_all_bids():
     return db().table("bids").select("*, users(fullname), jobpostings(title)").order("createdat", desc=True).execute().data or []
@@ -94,7 +134,7 @@ def get_all_bids():
 def create_order(buyerid, sellerid, listingid, amount):
     res = db().table("ordersescrow").insert({
         "buyerid": buyerid, "sellerid": sellerid,
-        "listingid": listingid, "amount": amount, "escrowstatus": "pending"
+        "listingid": listingid, "amount": amount, "escrowstatus": "active"
     }).execute()
     if res.data:
         # Deduct from buyer
@@ -117,11 +157,23 @@ def get_all_orders():
     return db().table("ordersescrow").select("*, skill_listing(title), buyer:users!ordersescrow_buyerid_fkey(fullname), seller:users!ordersescrow_sellerid_fkey(fullname)").order("createdat", desc=True).execute().data or []
 
 # ─── REVIEWS ────────────────────────────────────────
+def review_exists(orderid, reviewerid):
+    """Check if a review already exists for this order by this reviewer."""
+    res = db().table("reviews").select("reviewid").eq("orderid", orderid).eq("reviewerid", reviewerid).execute()
+    return len(res.data) > 0 if res.data else False
+
 def submit_review(orderid, reviewerid, revieweeid, rating, comment):
+    # 1. Insert review
     db().table("reviews").insert({
         "orderid": orderid, "reviewerid": reviewerid,
         "revieweeid": revieweeid, "ratingscore": rating, "comment": comment
     }).execute()
+
+    # 2. Recalculate and update seller's avgrating in users table
+    all_reviews = db().table("reviews").select("ratingscore").eq("revieweeid", revieweeid).execute().data or []
+    if all_reviews:
+        avg = sum(r["ratingscore"] for r in all_reviews) / len(all_reviews)
+        db().table("users").update({"avgrating": round(avg, 2)}).eq("studentid", revieweeid).execute()
 
 # ─── DISPUTES ───────────────────────────────────────
 def raise_dispute(orderid, initiatorid, reason):
