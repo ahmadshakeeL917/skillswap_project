@@ -24,14 +24,11 @@ st.markdown("""
 <style>
     .main-header {font-size:2.2rem; font-weight:800; color:#2563eb; margin-bottom:0;}
     .sub-header {color:#64748b; margin-bottom:1.5rem;}
-    .metric-card {background:white; padding:1.2rem; border-radius:12px; border:1px solid #e2e8f0; text-align:center;}
-    .metric-val {font-size:2rem; font-weight:800; color:#2563eb;}
-    .metric-lbl {color:#64748b; font-size:0.85rem;}
     .badge-green {background:#d1fae5; color:#065f46; padding:2px 10px; border-radius:999px; font-size:0.78rem; font-weight:600;}
     .badge-yellow {background:#fef3c7; color:#92400e; padding:2px 10px; border-radius:999px; font-size:0.78rem; font-weight:600;}
     .badge-red {background:#fee2e2; color:#991b1b; padding:2px 10px; border-radius:999px; font-size:0.78rem; font-weight:600;}
     .badge-blue {background:#dbeafe; color:#1d4ed8; padding:2px 10px; border-radius:999px; font-size:0.78rem; font-weight:600;}
-    .listing-card {background:white; border:1px solid #e2e8f0; border-radius:12px; padding:1rem; margin-bottom:0.75rem;}
+    .badge-gray {background:#f1f5f9; color:#475569; padding:2px 10px; border-radius:999px; font-size:0.78rem; font-weight:600;}
     div[data-testid="stSidebarContent"] {background: #0f172a;}
     section[data-testid="stSidebar"] * {color: white !important;}
 </style>
@@ -52,6 +49,7 @@ def render_sidebar():
             pages = {
                 "📊 Dashboard": "admin_dashboard",
                 "📋 Listings": "admin_listings",
+                "💼 Job Posts": "admin_jobs",
                 "⚠️ Disputes": "admin_disputes",
                 "👥 Users": "admin_users",
                 "📦 All Orders": "admin_orders",
@@ -264,7 +262,6 @@ def page_listings():
                                     st.error("Can't order your own listing!")
                                 else:
                                     db_helper.create_order(u["studentid"], l["providerid"], l["listing_id"], l["price"])
-                                    # Refresh user balance
                                     users = db_helper.db().table("users").select("*").eq("studentid", u["studentid"]).execute().data
                                     if users: st.session_state.user = users[0]
                                     st.success("✅ Order placed!")
@@ -282,7 +279,7 @@ def page_jobs():
     tab1, tab2 = st.tabs(["📋 Browse Jobs", "➕ Post a Job"])
 
     with tab1:
-        # Only show APPROVED jobs to everyone
+        # Sirf APPROVED jobs dikhao
         jobs = db_helper.db().table("jobpostings")\
             .select("*, users(fullname, studentid), category(categoryname)")\
             .eq("status", "open")\
@@ -291,7 +288,7 @@ def page_jobs():
 
         if not jobs:
             st.info("📋 No approved jobs right now. Check back later!")
-        
+
         for job in jobs:
             with st.container(border=True):
                 c1, c2 = st.columns([4, 1])
@@ -308,13 +305,12 @@ def page_jobs():
                 with c2:
                     st.markdown(f"### 💰 {job.get('budget', 0)} pts")
 
-                # Show bid button ONLY to sellers who are NOT the poster
                 if u:
                     is_poster = u["studentid"] == (job.get("users") or {}).get("studentid")
                     is_seller = u.get("role") in ("seller", "both")
-                    
+
                     if is_poster:
-                        # Job owner sees their bids
+                        # Job wala apni bids dekhe
                         bids = db_helper.get_bids_for_job(job["postingid"])
                         if bids:
                             with st.expander(f"👁️ View {len(bids)} Bid(s)"):
@@ -337,16 +333,16 @@ def page_jobs():
                                             st.markdown(f'<span class="{color}">{bid["bidstatus"]}</span>', unsafe_allow_html=True)
                         else:
                             st.caption("⏳ No bids yet on your job")
-                    
+
                     elif is_seller:
-                        # Seller can place bid
+                        # Seller bid lagaye
                         with st.expander("📨 Apply / Place a Bid"):
                             with st.form(f"bid_{job['postingid']}"):
                                 st.markdown(f"**Bidding for:** {job['title']}")
-                                amount = st.number_input("Your Bid Amount (pts)", 
+                                amount = st.number_input("Your Bid Amount (pts)",
                                     min_value=1, value=job.get("budget", 100),
                                     key=f"amt_{job['postingid']}")
-                                note = st.text_area("Cover Letter / Proposal", 
+                                note = st.text_area("Cover Letter / Proposal",
                                     placeholder="Explain why you're the best fit for this job...",
                                     key=f"note_{job['postingid']}")
                                 submitted = st.form_submit_button("🚀 Submit Bid", use_container_width=True)
@@ -369,31 +365,29 @@ def page_jobs():
             st.warning("⚠️ Please login to post a job!")
             return
         if u["role"] not in ("buyer", "both"):
-            st.warning("⚠️ Only buyers can post jobs. Update your role!")
+            st.warning("⚠️ Only buyers can post jobs!")
             return
-        
+
         st.info("ℹ️ Your job will be reviewed by admin before going live.")
         categories = db_helper.get_categories()
-        
+
         with st.form("post_job"):
             title = st.text_input("Job Title *", placeholder="I need a logo designed for my startup...")
-            description = st.text_area("Job Description *", 
+            description = st.text_area("Job Description *",
                 placeholder="Describe exactly what you need, requirements, deadlines...")
             c1, c2 = st.columns(2)
             with c1:
                 budget = st.number_input("Budget (pts) *", min_value=1, value=500)
             with c2:
-                cat_choice = st.selectbox("Category", 
-                    ["None"] + [c["categoryname"] for c in categories])
+                cat_choice = st.selectbox("Category", ["None"] + [c["categoryname"] for c in categories])
             isurgent = st.checkbox("🔥 Mark as Urgent")
-            
+
             if st.form_submit_button("📤 Submit Job for Review", use_container_width=True):
                 if not title or not description:
                     st.error("Please fill title and description!")
                 else:
-                    cat_id = next((c["categoryid"] for c in categories 
+                    cat_id = next((c["categoryid"] for c in categories
                                   if c["categoryname"] == cat_choice), None)
-                    # Insert with pending approval
                     db_helper.db().table("jobpostings").insert({
                         "requesterid": u["studentid"],
                         "title": title,
@@ -407,24 +401,25 @@ def page_jobs():
                     st.success("✅ Job submitted! Waiting for admin approval.")
                     st.rerun()
 
-        # Show user's own pending jobs
+        # User ki apni jobs
         st.markdown("---")
         st.markdown("### 📋 My Posted Jobs")
         my_jobs = db_helper.db().table("jobpostings")\
             .select("*, category(categoryname)")\
             .eq("requesterid", u["studentid"])\
             .order("createdat", desc=True).execute().data or []
-        
+
         STATUS_COLOR = {"pending": "badge-yellow", "approved": "badge-green", "rejected": "badge-red"}
         if not my_jobs:
             st.info("You haven't posted any jobs yet.")
         for j in my_jobs:
             with st.container(border=True):
                 approval = j.get("approvalstatus", "pending")
-                st.markdown(f'<span class="{STATUS_COLOR.get(approval, "badge-gray")}">{approval}</span>', 
+                st.markdown(f'<span class="{STATUS_COLOR.get(approval, "badge-gray")}">{approval}</span>',
                            unsafe_allow_html=True)
                 st.markdown(f"**{j['title']}** — 💰 {j['budget']} pts")
                 st.caption(f"Status: {j['status']} • Posted: {str(j.get('createdat',''))[:10]}")
+
 
 def page_my_orders():
     u = st.session_state.user
@@ -536,20 +531,15 @@ def page_dashboard():
     st.markdown(f"## 📊 Dashboard — {u['fullname']}")
 
     c1, c2, c3, c4 = st.columns(4)
-    with c1:
-        st.metric("💰 Wallet", f"{u['walletbalance']} pts")
-    with c2:
-        st.metric("⭐ Rating", f"{u.get('avgrating', 0):.1f}")
+    with c1: st.metric("💰 Wallet", f"{u['walletbalance']} pts")
+    with c2: st.metric("⭐ Rating", f"{u.get('avgrating', 0):.1f}")
     with c3:
         role_map = {"buyer": "🛒 Buyer", "seller": "💼 Seller", "both": "🔄 Both"}
         st.metric("Role", role_map.get(u["role"], u["role"]))
     with c4:
-        status = "🚫 Suspended" if u.get("issuspended") else "✅ Active"
-        st.metric("Status", status)
+        st.metric("Status", "🚫 Suspended" if u.get("issuspended") else "✅ Active")
 
     st.markdown("---")
-
-    # Transactions
     st.markdown("### 💳 Wallet Transactions")
     txns = db_helper.get_transactions(u["studentid"])
     if txns:
@@ -558,7 +548,6 @@ def page_dashboard():
         df["amount"] = df["amount"].apply(lambda x: f"+{x}" if x > 0 else str(x))
         st.dataframe(df[["createdat", "transactiontype", "amount"]], use_container_width=True, hide_index=True)
 
-        # Chart
         raw = db_helper.get_transactions(u["studentid"])
         if raw:
             df2 = pd.DataFrame(raw)
@@ -589,9 +578,7 @@ def page_admin_dashboard():
 
     st.markdown("---")
     col1, col2 = st.columns(2)
-
     with col1:
-        # Orders by status
         orders = db_helper.get_all_orders()
         if orders:
             df = pd.DataFrame(orders)
@@ -600,9 +587,7 @@ def page_admin_dashboard():
             fig = px.pie(status_counts, values="Count", names="Status", title="Orders by Status",
                          color_discrete_sequence=px.colors.qualitative.Set2)
             st.plotly_chart(fig, use_container_width=True)
-
     with col2:
-        # Listings by status
         all_listings = db_helper.get_listings()
         if all_listings:
             df2 = pd.DataFrame(all_listings)
@@ -613,7 +598,6 @@ def page_admin_dashboard():
             fig2.update_layout(paper_bgcolor="white", plot_bgcolor="#f8fafc", showlegend=False)
             st.plotly_chart(fig2, use_container_width=True)
 
-    # Recent orders table
     st.markdown("### 📦 Recent Orders")
     orders = db_helper.get_all_orders()
     if orders:
@@ -631,7 +615,6 @@ def page_admin_listings():
     filter_status = st.selectbox("Filter by Status", ["all", "pending", "approved", "rejected"])
     status = None if filter_status == "all" else filter_status
     listings = db_helper.get_listings(status)
-
     st.markdown(f"**{len(listings)} listings**")
     STATUS_COLOR = {"pending": "badge-yellow", "approved": "badge-green", "rejected": "badge-red"}
 
@@ -657,6 +640,59 @@ def page_admin_listings():
                         st.rerun()
                 if st.button("🗑️ Delete", key=f"del_{l['listing_id']}", use_container_width=True):
                     db_helper.delete_listing(l["listing_id"])
+                    st.success("Deleted!")
+                    st.rerun()
+
+
+def page_admin_jobs():
+    st.markdown("## 💼 Manage Job Postings")
+    filter_status = st.selectbox("Filter by Approval", ["pending", "approved", "rejected", "all"])
+
+    query = db_helper.db().table("jobpostings")\
+        .select("*, users(fullname, email), category(categoryname)")\
+        .order("createdat", desc=True)
+    if filter_status != "all":
+        query = query.eq("approvalstatus", filter_status)
+    jobs = query.execute().data or []
+
+    st.markdown(f"**{len(jobs)} jobs found**")
+    STATUS_COLOR = {"pending": "badge-yellow", "approved": "badge-green", "rejected": "badge-red"}
+
+    if not jobs:
+        st.info("No jobs found!")
+        return
+
+    for job in jobs:
+        with st.container(border=True):
+            c1, c2 = st.columns([5, 2])
+            with c1:
+                approval = job.get("approvalstatus", "pending")
+                urgent = job.get("isurgent") == "yes"
+                badges = f'<span class="{STATUS_COLOR.get(approval, "badge-gray")}">{approval}</span>'
+                if urgent: badges += ' <span class="badge-red">🔥 Urgent</span>'
+                st.markdown(badges, unsafe_allow_html=True)
+                st.markdown(f"**{job['title']}**")
+                st.caption(f"👤 {(job.get('users') or {}).get('fullname','?')} • 💰 {job.get('budget',0)} pts • {(job.get('category') or {}).get('categoryname','General')}")
+                st.caption((job.get("description") or "")[:150])
+            with c2:
+                approval = job.get("approvalstatus", "pending")
+                if approval != "approved":
+                    if st.button("✅ Approve", key=f"appr_job_{job['postingid']}", use_container_width=True):
+                        db_helper.db().table("jobpostings")\
+                            .update({"approvalstatus": "approved"})\
+                            .eq("postingid", job["postingid"]).execute()
+                        st.success("Job Approved!")
+                        st.rerun()
+                if approval != "rejected":
+                    if st.button("❌ Reject", key=f"rej_job_{job['postingid']}", use_container_width=True):
+                        db_helper.db().table("jobpostings")\
+                            .update({"approvalstatus": "rejected"})\
+                            .eq("postingid", job["postingid"]).execute()
+                        st.warning("Job Rejected!")
+                        st.rerun()
+                if st.button("🗑️ Delete", key=f"del_job_{job['postingid']}", use_container_width=True):
+                    db_helper.db().table("jobpostings")\
+                        .delete().eq("postingid", job["postingid"]).execute()
                     st.success("Deleted!")
                     st.rerun()
 
@@ -762,10 +798,8 @@ def page_admin_analytics():
     listings = db_helper.get_listings()
     bids = db_helper.get_all_bids()
 
-    # Row 1
     c1, c2 = st.columns(2)
     with c1:
-        # Orders over time
         if orders:
             df = pd.DataFrame(orders)
             df["date"] = pd.to_datetime(df["createdat"]).dt.date
@@ -774,9 +808,7 @@ def page_admin_analytics():
                          color_discrete_sequence=["#2563eb"])
             fig.update_layout(paper_bgcolor="white", plot_bgcolor="#f8fafc")
             st.plotly_chart(fig, use_container_width=True)
-
     with c2:
-        # Revenue by day
         if orders:
             df = pd.DataFrame(orders)
             df["date"] = pd.to_datetime(df["createdat"]).dt.date
@@ -786,10 +818,8 @@ def page_admin_analytics():
             fig2.update_layout(paper_bgcolor="white", plot_bgcolor="#f8fafc")
             st.plotly_chart(fig2, use_container_width=True)
 
-    # Row 2
     c3, c4 = st.columns(2)
     with c3:
-        # Users by role
         if users:
             df = pd.DataFrame(users)
             role_counts = df["role"].value_counts().reset_index()
@@ -797,9 +827,7 @@ def page_admin_analytics():
             fig3 = px.pie(role_counts, values="Count", names="Role", title="👥 Users by Role",
                           color_discrete_sequence=["#2563eb", "#f59e0b", "#10b981"])
             st.plotly_chart(fig3, use_container_width=True)
-
     with c4:
-        # Bids analysis
         if bids:
             df = pd.DataFrame(bids)
             bid_status = df["bidstatus"].value_counts().reset_index()
@@ -810,7 +838,6 @@ def page_admin_analytics():
             fig4.update_layout(paper_bgcolor="white", plot_bgcolor="#f8fafc", showlegend=False)
             st.plotly_chart(fig4, use_container_width=True)
 
-    # Row 3 - Top sellers
     st.markdown("### 🏆 Top Sellers by Wallet Balance")
     if users:
         df = pd.DataFrame(users)
@@ -818,10 +845,9 @@ def page_admin_analytics():
         if not sellers.empty:
             fig5 = px.bar(sellers, x="fullname", y="walletbalance", title="Top Sellers",
                           color_discrete_sequence=["#7c3aed"])
-            fig5.update_layout(paper_bgcolor="white", plot_bgcolor="#f8fafc", xaxis_title="Seller", yaxis_title="Wallet (pts)")
+            fig5.update_layout(paper_bgcolor="white", plot_bgcolor="#f8fafc")
             st.plotly_chart(fig5, use_container_width=True)
 
-    # Listings category breakdown
     st.markdown("### 📊 Listings by Category")
     if listings:
         df = pd.DataFrame(listings)
@@ -838,12 +864,12 @@ def page_admin_analytics():
 # ROUTER
 # ════════════════════════════════════════════════════
 render_sidebar()
-
 page = st.session_state.page
 
 if st.session_state.admin:
     if page == "admin_dashboard": page_admin_dashboard()
     elif page == "admin_listings": page_admin_listings()
+    elif page == "admin_jobs": page_admin_jobs()
     elif page == "admin_disputes": page_admin_disputes()
     elif page == "admin_users": page_admin_users()
     elif page == "admin_orders": page_admin_orders()
