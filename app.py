@@ -282,9 +282,16 @@ def page_jobs():
     tab1, tab2 = st.tabs(["📋 Browse Jobs", "➕ Post a Job"])
 
     with tab1:
-        jobs = db_helper.get_jobs("open")
+        # Only show APPROVED jobs to everyone
+        jobs = db_helper.db().table("jobpostings")\
+            .select("*, users(fullname, studentid), category(categoryname)")\
+            .eq("status", "open")\
+            .eq("approvalstatus", "approved")\
+            .order("createdat", desc=True).execute().data or []
+
         if not jobs:
-            st.info("No open jobs right now. Be the first to post!")
+            st.info("📋 No approved jobs right now. Check back later!")
+        
         for job in jobs:
             with st.container(border=True):
                 c1, c2 = st.columns([4, 1])
@@ -296,63 +303,128 @@ def page_jobs():
                     st.markdown(badges, unsafe_allow_html=True)
                     st.markdown(f"**{job['title']}**")
                     st.caption(job.get("description", ""))
-                    st.caption(f"👤 {(job.get('users') or {}).get('fullname', '?')} • 📅 {str(job.get('createdat',''))[:10]}")
+                    poster = (job.get("users") or {}).get("fullname", "?")
+                    st.caption(f"👤 Posted by: {poster} • 📅 {str(job.get('createdat',''))[:10]}")
                 with c2:
-                    st.markdown(f"### 💰 {job.get('budget', 0)}")
+                    st.markdown(f"### 💰 {job.get('budget', 0)} pts")
 
-                if u and u.get("role") in ("seller", "both") and u["studentid"] != job.get("requesterid"):
-                    with st.expander("📨 Place a Bid"):
-                        with st.form(f"bid_{job['postingid']}"):
-                            amount = st.number_input("Your Bid (pts)", min_value=1, value=job.get("budget", 100))
-                            note = st.text_area("Proposal Note", placeholder="Why should they pick you?")
-                            if st.form_submit_button("Submit Bid", use_container_width=True):
-                                db_helper.place_bid(job["postingid"], u["studentid"], amount, note)
-                                st.success("✅ Bid placed!")
-                                st.rerun()
-
-                # Show bids for job owner
-                if u and u["studentid"] == job.get("requesterid"):
-                    bids = db_helper.get_bids_for_job(job["postingid"])
-                    if bids:
-                        with st.expander(f"👁️ View {len(bids)} Bids"):
-                            for bid in bids:
-                                bc1, bc2, bc3 = st.columns([2, 1, 1])
-                                with bc1:
-                                    st.write(f"**{(bid.get('users') or {}).get('fullname', '?')}** — {bid.get('proposalnote','')[:60]}")
-                                with bc2:
-                                    st.write(f"💰 {bid['bidamount']} pts")
-                                with bc3:
-                                    if bid["bidstatus"] == "pending":
-                                        if st.button("Accept", key=f"acc_{bid['bidid']}"):
-                                            db_helper.accept_bid(bid["bidid"], job["postingid"])
-                                            st.success("Bid accepted!")
-                                            st.rerun()
+                # Show bid button ONLY to sellers who are NOT the poster
+                if u:
+                    is_poster = u["studentid"] == (job.get("users") or {}).get("studentid")
+                    is_seller = u.get("role") in ("seller", "both")
+                    
+                    if is_poster:
+                        # Job owner sees their bids
+                        bids = db_helper.get_bids_for_job(job["postingid"])
+                        if bids:
+                            with st.expander(f"👁️ View {len(bids)} Bid(s)"):
+                                for bid in bids:
+                                    bc1, bc2, bc3 = st.columns([2, 1, 1])
+                                    with bc1:
+                                        bidder = (bid.get('users') or {}).get('fullname', '?')
+                                        st.write(f"**{bidder}**")
+                                        st.caption(bid.get('proposalnote','')[:80])
+                                    with bc2:
+                                        st.write(f"💰 {bid['bidamount']} pts")
+                                    with bc3:
+                                        if bid["bidstatus"] == "pending":
+                                            if st.button("✅ Accept", key=f"acc_{bid['bidid']}"):
+                                                db_helper.accept_bid(bid["bidid"], job["postingid"])
+                                                st.success("Bid accepted!")
+                                                st.rerun()
+                                        else:
+                                            color = "badge-green" if bid["bidstatus"] == "accepted" else "badge-red"
+                                            st.markdown(f'<span class="{color}">{bid["bidstatus"]}</span>', unsafe_allow_html=True)
+                        else:
+                            st.caption("⏳ No bids yet on your job")
+                    
+                    elif is_seller:
+                        # Seller can place bid
+                        with st.expander("📨 Apply / Place a Bid"):
+                            with st.form(f"bid_{job['postingid']}"):
+                                st.markdown(f"**Bidding for:** {job['title']}")
+                                amount = st.number_input("Your Bid Amount (pts)", 
+                                    min_value=1, value=job.get("budget", 100),
+                                    key=f"amt_{job['postingid']}")
+                                note = st.text_area("Cover Letter / Proposal", 
+                                    placeholder="Explain why you're the best fit for this job...",
+                                    key=f"note_{job['postingid']}")
+                                submitted = st.form_submit_button("🚀 Submit Bid", use_container_width=True)
+                                if submitted:
+                                    if not note:
+                                        st.error("Please write a proposal note!")
                                     else:
-                                        st.markdown(f'<span class="badge-green">{bid["bidstatus"]}</span>', unsafe_allow_html=True)
+                                        db_helper.place_bid(job["postingid"], u["studentid"], amount, note)
+                                        st.success("✅ Bid submitted successfully!")
+                                        st.rerun()
+                    else:
+                        st.caption("💡 Only sellers can bid. Register as seller to apply!")
+                else:
+                    if st.button("🔑 Login to Apply", key=f"login_{job['postingid']}"):
+                        st.session_state.page = "login"
+                        st.rerun()
 
     with tab2:
         if not u:
-            st.warning("Please login to post a job!")
+            st.warning("⚠️ Please login to post a job!")
             return
         if u["role"] not in ("buyer", "both"):
-            st.warning("Only buyers can post jobs!")
+            st.warning("⚠️ Only buyers can post jobs. Update your role!")
             return
+        
+        st.info("ℹ️ Your job will be reviewed by admin before going live.")
         categories = db_helper.get_categories()
+        
         with st.form("post_job"):
-            title = st.text_input("Job Title", placeholder="I need a logo designed...")
-            description = st.text_area("Description", placeholder="Describe what you need...")
+            title = st.text_input("Job Title *", placeholder="I need a logo designed for my startup...")
+            description = st.text_area("Job Description *", 
+                placeholder="Describe exactly what you need, requirements, deadlines...")
             c1, c2 = st.columns(2)
             with c1:
-                budget = st.number_input("Budget (pts)", min_value=1, value=500)
+                budget = st.number_input("Budget (pts) *", min_value=1, value=500)
             with c2:
-                cat_choice = st.selectbox("Category", ["None"] + [c["categoryname"] for c in categories])
+                cat_choice = st.selectbox("Category", 
+                    ["None"] + [c["categoryname"] for c in categories])
             isurgent = st.checkbox("🔥 Mark as Urgent")
-            if st.form_submit_button("Post Job", use_container_width=True):
-                cat_id = next((c["categoryid"] for c in categories if c["categoryname"] == cat_choice), None)
-                db_helper.create_job(u["studentid"], title, description, budget, cat_id, isurgent)
-                st.success("✅ Job posted!")
-                st.rerun()
+            
+            if st.form_submit_button("📤 Submit Job for Review", use_container_width=True):
+                if not title or not description:
+                    st.error("Please fill title and description!")
+                else:
+                    cat_id = next((c["categoryid"] for c in categories 
+                                  if c["categoryname"] == cat_choice), None)
+                    # Insert with pending approval
+                    db_helper.db().table("jobpostings").insert({
+                        "requesterid": u["studentid"],
+                        "title": title,
+                        "description": description,
+                        "budget": budget,
+                        "categoryid": cat_id,
+                        "isurgent": "yes" if isurgent else "no",
+                        "status": "open",
+                        "approvalstatus": "pending"
+                    }).execute()
+                    st.success("✅ Job submitted! Waiting for admin approval.")
+                    st.rerun()
 
+        # Show user's own pending jobs
+        st.markdown("---")
+        st.markdown("### 📋 My Posted Jobs")
+        my_jobs = db_helper.db().table("jobpostings")\
+            .select("*, category(categoryname)")\
+            .eq("requesterid", u["studentid"])\
+            .order("createdat", desc=True).execute().data or []
+        
+        STATUS_COLOR = {"pending": "badge-yellow", "approved": "badge-green", "rejected": "badge-red"}
+        if not my_jobs:
+            st.info("You haven't posted any jobs yet.")
+        for j in my_jobs:
+            with st.container(border=True):
+                approval = j.get("approvalstatus", "pending")
+                st.markdown(f'<span class="{STATUS_COLOR.get(approval, "badge-gray")}">{approval}</span>', 
+                           unsafe_allow_html=True)
+                st.markdown(f"**{j['title']}** — 💰 {j['budget']} pts")
+                st.caption(f"Status: {j['status']} • Posted: {str(j.get('createdat',''))[:10]}")
 
 def page_my_orders():
     u = st.session_state.user
