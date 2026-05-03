@@ -324,9 +324,19 @@ def page_jobs():
                                         st.write(f"💰 {bid['bidamount']} pts")
                                     with bc3:
                                         if bid["bidstatus"] == "pending":
-                                            if st.button("✅ Accept", key=f"acc_{bid['bidid']}"):
-                                                db_helper.accept_bid(bid["bidid"], job["postingid"])
-                                                st.success("Bid accepted!")
+                                            # Check buyer wallet before accepting
+                                            if u["walletbalance"] < bid["bidamount"]:
+                                                st.warning("💸 Low balance!")
+                                            elif st.button("✅ Accept", key=f"acc_{bid['bidid']}"):
+                                                result = db_helper.accept_bid(bid["bidid"], job["postingid"])
+                                                if result:
+                                                    # Refresh buyer session with updated wallet
+                                                    updated = db_helper.db().table("users").select("*").eq("studentid", u["studentid"]).execute().data
+                                                    if updated:
+                                                        st.session_state.user = updated[0]
+                                                    st.success(f"✅ Bid accepted! Order created. {bid['bidamount']} pts held in escrow.")
+                                                else:
+                                                    st.error("Failed to create order.")
                                                 st.rerun()
                                         else:
                                             color = "badge-green" if bid["bidstatus"] == "accepted" else "badge-red"
@@ -461,13 +471,19 @@ def page_my_orders():
                                 st.rerun()
 
                 if o["escrowstatus"] == "completed":
-                    with st.expander("⭐ Leave Review"):
-                        with st.form(f"rev_{o['orderid']}"):
-                            rating = st.slider("Rating", 1, 5, 5)
-                            comment = st.text_area("Comment")
-                            if st.form_submit_button("Submit Review"):
-                                db_helper.submit_review(o["orderid"], u["studentid"], o["sellerid"], rating, comment)
-                                st.success("Review submitted!")
+                    # Check if review already exists
+                    already_reviewed = db_helper.review_exists(o["orderid"], u["studentid"])
+                    if already_reviewed:
+                        st.success("✅ You already reviewed this order.")
+                    else:
+                        with st.expander("⭐ Leave Review"):
+                            with st.form(f"rev_{o['orderid']}"):
+                                rating = st.slider("Rating", 1, 5, 5)
+                                comment = st.text_area("Comment")
+                                if st.form_submit_button("Submit Review"):
+                                    db_helper.submit_review(o["orderid"], u["studentid"], o["sellerid"], rating, comment)
+                                    st.success("⭐ Review submitted! Seller rating updated.")
+                                    st.rerun()
 
     with tab2:
         orders = db_helper.get_my_orders(u["studentid"], "seller")
