@@ -1,7 +1,6 @@
 import streamlit as st
 from supabase import create_client
 
-@st.cache_resource
 def get_supabase():
     url = st.secrets["supabase"]["url"]
     key = st.secrets["supabase"]["key"]
@@ -9,7 +8,6 @@ def get_supabase():
 
 def db():
     return get_supabase()
-
 # ─── AUTH ───────────────────────────────────────────
 def login_user(email, password):
     res = db().table("users").select("*").eq("email", email).eq("passwordhash", password).execute()
