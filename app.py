@@ -106,12 +106,12 @@ def add_achievement(user_id: str, achievement_type: str, data: Dict):
     user = next((u for u in data["users"] if u["id"] == user_id), None)
     if user:
         badges = user.get("badges", [])
-        if achievement_type == "first_swap" and "First Swap" not in badges:
-            badges.append("First Swap")
-        elif achievement_type == "5_swaps" and "Active Learner" not in badges:
-            badges.append("Active Learner")
-        elif achievement_type == "10_swaps" and "Expert Swapper" not in badges:
-            badges.append("Expert Swapper")
+        if achievement_type == "first_swap" and " First Swap" not in badges:
+            badges.append(" First Swap")
+        elif achievement_type == "5_swaps" and " Active Learner" not in badges:
+            badges.append(" Active Learner")
+        elif achievement_type == "10_swaps" and " Expert Swapper" not in badges:
+            badges.append(" Expert Swapper")
         user["badges"] = badges
 
 # ---------------- Enhanced Algorithm ----------------
@@ -710,10 +710,10 @@ def skill_badge_html(skill: str, proficiency: str = "", want: bool = False) -> s
 
 def status_badge_html(status: str) -> str:
     icons = {
-        "Pending": "",
-        "Accepted": "",
-        "Completed": "",
-        "Rejected": ""
+        "Pending": "P",
+        "Accepted": "A",
+        "Completed": "C",
+        "Rejected": "R"
     }
     icon = icons.get(status, "")
     return f"<span class='status-badge status-{status.lower()}'>{icon} {status}</span>"
@@ -790,12 +790,12 @@ requests = data.get("requests", [])
 with st.sidebar:
     st.markdown("""
         <div class='sidebar-brand'>
-            <div class='brand-icon'>SS</div>
+            <div class='brand-icon'></div>
             <div class='brand-text'>SkillSwap</div>
         </div>
     """, unsafe_allow_html=True)
     
-    st.markdown("<div style='text-align:center;color:rgba(255,255,255,0.6);font-size:12px;margin-bottom:20px'>Built by CSE Engineering Student</div>", unsafe_allow_html=True)
+    st.markdown("<div style='text-align:center;color:rgba(255,255,255,0.6);font-size:12px;margin-bottom:20px'>🔧 Built by CSE Engineering Student</div>", unsafe_allow_html=True)
     
     if users:
         st.markdown("### Active Profile")
@@ -819,8 +819,8 @@ with st.sidebar:
     
     mode = st.radio(
         "Navigation",
-        ["Dashboard", "Create Profile", "My Profile", "Discover", 
-         "Requests", "Analytics", "Leaderboard"],
+        ["Dashboard", " Create Profile", " My Profile", " Discover", 
+         "Requests", " Analytics", "Leaderboard"],
         label_visibility="collapsed"
     )
     
@@ -831,7 +831,7 @@ with st.sidebar:
     st.markdown("<div class='quick-actions-container'>", unsafe_allow_html=True)
     
     # Demo Data
-    if st.button("Load Demo Data", use_container_width=True, key="demo"):
+    if st.button(" Load Demo Data", use_container_width=True, key="demo"):
         demo_users = [
             {
                 "name": "Aman Verma", "email": "aman@skillswap.com",
@@ -844,7 +844,7 @@ with st.sidebar:
             },
             {
                 "name": "Riya Kapoor", "email": "riya@skillswap.com",
-                "bio": "Frontend wizard | React & Figma",
+                "bio": "Frontend wizard  | React & Figma",
                 "location": "Bangalore", "interests": ["design", "frontend", "UX"],
                 "skills_offered": ["react", "typescript", "figma", "css", "tailwind"],
                 "skills_wanted": ["python", "django", "postgresql"],
@@ -878,7 +878,7 @@ with st.sidebar:
                     "id": str(uuid.uuid4()),
                     **d,
                     "endorsements_received": random.randint(5, 20),
-                    "badges": random.sample(["First Swap", "Active Learner", "Expert Swapper"], k=random.randint(1, 3)),
+                    "badges": random.sample([" First Swap", " Active Learner", " Expert Swapper"], k=random.randint(1, 3)),
                     "availability": random.choice(["Available", "Busy", "Away"]),
                     "response_rate": random.randint(85, 100),
                     "created_at": datetime.datetime.utcnow().isoformat(),
@@ -889,12 +889,12 @@ with st.sidebar:
         
         data["users"] = users
         write_data(data)
-        st.success(f"Added {added} demo profiles!")
+        st.success(f" Added {added} demo profiles!")
         time.sleep(1)
         st.rerun()
     
     # Export Users CSV
-    if st.button("Export Users CSV", use_container_width=True, key="export_users"):
+    if st.button(" Export Users CSV", use_container_width=True, key="export_users"):
         if users:
             csv_data = export_users_csv(users)
             st.download_button(
@@ -1021,7 +1021,7 @@ Top Users (by swaps):
         time.sleep(1)
         st.rerun()
     
-    # Reset All Data
+    # Reset All DatA
     if st.button("Reset All Data", use_container_width=True, key="reset"):
         write_data({"users": [], "requests": [], "messages": [], "endorsements": [], "achievements": []})
         st.session_state.current_user = None
@@ -1046,14 +1046,14 @@ st.markdown("""
     <div class='ultra-header'>
         <div class='header-content'>
             <h1 class='title-ultra'>SkillSwap </h1>
-            <p class='subtitle-ultra'>Peer-to-Peer Skill Exchange Platform - Connect - Learn - Grow</p>
+            <p class='subtitle-ultra'>Peer-to-Peer Skill Exchange Platform • Connect • Learn • Grow</p>
         </div>
     </div>
 """, unsafe_allow_html=True)
 
 # ---------------- Pages (Same as before, but now with working Quick Actions) ----------------
 if mode == "Dashboard":
-    st.markdown("## Platform Overview")
+    st.markdown("##Platform Overview")
     
     col1, col2, col3, col4 = st.columns(4)
     with col1:
@@ -1105,7 +1105,7 @@ if mode == "Dashboard":
                 st.markdown(f"<div style='font-size:32px;font-weight:900;color:var(--primary)'>#{idx}</div>", unsafe_allow_html=True)
             with cols[1]:
                 st.markdown(f"### {user['name']}")
-                st.markdown(f"<div class='muted'>{user.get('swaps_completed', 0)} swaps - {user.get('rating', 0):.1f} - Level {user.get('level', 1)}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='muted'>{user.get('swaps_completed', 0)} swaps • {user.get('rating', 0):.1f} • Level {user.get('level', 1)}</div>", unsafe_allow_html=True)
             with cols[2]:
                 st.markdown(avatar_html(user['name']), unsafe_allow_html=True)
             st.markdown("</div>", unsafe_allow_html=True)
@@ -1123,7 +1123,7 @@ if mode == "Dashboard":
                             <div style='display:flex;justify-content:space-between;align-items:center'>
                                 <div>
                                     <strong>{sender['name']}</strong> → <strong>{receiver['name']}</strong>
-                                    <div class='muted'>{req.get('skill_offered', '')} / {req.get('skill_wanted', '')}</div>
+                                    <div class='muted'>{req.get('skill_offered', '')} {req.get('skill_wanted', '')}</div>
                                 </div>
                                 {status_badge_html(req['status'])}
                             </div>
@@ -1132,8 +1132,8 @@ if mode == "Dashboard":
         else:
             st.info("No recent activity")
 
-elif mode == "Create Profile":
-    st.markdown("## Create Your Profile")
+elif mode == "✨ Create Profile":
+    st.markdown("## ✨ Create Your Profile")
     
     with st.form("create_profile", clear_on_submit=True):
         col1, col2 = st.columns(2)
@@ -1296,7 +1296,7 @@ elif mode == "Discover":
                         st.markdown(f"<div class='muted'>{other.get('bio', '')[:150]}</div>", unsafe_allow_html=True)
                         prof = other.get("proficiency", {})
                         st.markdown("**Offers:** " + " ".join([skill_badge_html(s, prof.get(s, ""), False) for s in other["skills_offered"][:5]]), unsafe_allow_html=True)
-                        st.markdown("**Wants:** " + " ".join([skill_badge_html(s, "", True) for s in other["skills_wanted"][:5]]), unsafe_allow_html=True)
+                        st.markdown("**Wants:** " + " ".join([skill_badge_html(s, "", True) for s in other["skills_wanted"][:5] ]), unsafe_allow_html=True)
                     
                     with col3:
                         st.markdown(compat_display_html(score, details), unsafe_allow_html=True)
@@ -1366,7 +1366,7 @@ elif mode == "Requests":
                     sender = next((u for u in users if u["id"] == req["sender_id"]), None)
                     receiver = next((u for u in users if u["id"] == req["receiver_id"]), None)
                     if sender and receiver:
-                        st.markdown(f"**{sender['name']}** / **{receiver['name']}** | {req.get('skill_offered', '')} / {req.get('skill_wanted', '')}", unsafe_allow_html=True)
+                        st.markdown(f"**{sender['name']}**  **{receiver['name']}** | {req.get('skill_offered', '')}  {req.get('skill_wanted', '')}", unsafe_allow_html=True)
             else:
                 st.info("No completed swaps")
 
@@ -1381,7 +1381,7 @@ elif mode == "Analytics":
                 all_skills[s] = all_skills.get(s, 0) + 1
         
         if all_skills:
-            st.markdown("### Most Offered Skills")
+            st.markdown("Most Offered Skills")
             top_skills = sorted(all_skills.items(), key=lambda x: x[1], reverse=True)[:10]
             for skill, count in top_skills:
                 st.markdown(f"**{skill.capitalize()}**: {count} users")
@@ -1393,25 +1393,25 @@ elif mode == "Analytics":
             locations[loc] = locations.get(loc, 0) + 1
         
         if locations:
-            st.markdown("### User Locations")
+            st.markdown(" User Locations")
             for loc, count in sorted(locations.items(), key=lambda x: x[1], reverse=True):
                 st.markdown(f"**{loc}**: {count} users")
     else:
         st.info("No data yet!")
 
 elif mode == "Leaderboard":
-    st.markdown("## Top Performers")
+    st.markdown("Top Performers")
     
     if users:
         sorted_users = sorted(users, key=lambda u: (u.get("swaps_completed", 0), u.get("rating", 0)), reverse=True)
         
         for idx, user in enumerate(sorted_users[:10], 1):
-            medal = "#1" if idx == 1 else "#2" if idx == 2 else "#3" if idx == 3 else f"#{idx}"
+            medal = "  " if idx == 1 else " " if idx == 2 else "  " if idx == 3 else f"#{idx}"
             st.markdown(f"""
                 <div class='glass-card'>
                     <h2>{medal} {user['name']}</h2>
                     <div class='muted'>
-                        {user.get('rating', 0):.1f} | 
+                         {user.get('rating', 0):.1f} | 
                         {user.get('swaps_completed', 0)} swaps | 
                         Level {user.get('level', 1)} | 
                         {user.get('experience_points', 0)} XP
